@@ -77,7 +77,7 @@ impl<KP> GenericClientBuilder<KP> {
 pub struct GenericClient<T> {
     client_id: String,
     key_provider: T,
-    check_expiration: bool,
+    pub check_expiration: bool,
 }
 
 impl<KP: Default> GenericClient<Arc<Mutex<KP>>> {
