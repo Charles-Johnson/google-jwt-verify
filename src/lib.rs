@@ -10,6 +10,7 @@ mod key_provider;
 mod token;
 mod unverified_token;
 
+use base64::Engine;
 pub use crate::client::Client;
 #[cfg(feature = "async")]
 pub use crate::client::TokioClient;
@@ -17,5 +18,5 @@ pub use crate::token::{IdPayload, RequiredClaims, Token};
 pub use error::Error;
 
 fn base64_decode(input: &str) -> Result<Vec<u8>, base64::DecodeError> {
-    base64::decode_config(&input, base64::URL_SAFE)
+    base64::engine::general_purpose::URL_SAFE.decode(input)
 }
