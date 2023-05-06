@@ -77,7 +77,7 @@ impl<KP> GenericClientBuilder<KP> {
 pub struct GenericClient<T> {
     client_id: String,
     key_provider: T,
-    pub check_expiration: bool,
+    check_expiration: bool,
 }
 
 impl<KP: Default> GenericClient<Arc<Mutex<KP>>> {
@@ -128,8 +128,19 @@ impl<KP: AsyncKeyProvider> GenericClient<Arc<tokio::sync::Mutex<KP>>> {
     where
         for<'a> P: Deserialize<'a>,
     {
+        self.verify_token_with_payload_async_expire(token_string, self.check_expiration).await
+    }
+
+    pub async fn verify_token_with_payload_async_expire<P>(
+        &self,
+        token_string: &str,
+        check_expiration: bool,
+    ) -> Result<Token<P>, Error>
+        where
+                for<'a> P: Deserialize<'a>,
+    {
         let unverified_token =
-            UnverifiedToken::<P>::validate(token_string, self.check_expiration, &self.client_id)?;
+            UnverifiedToken::<P>::validate(token_string, check_expiration, &self.client_id)?;
         unverified_token.verify_async(&self.key_provider).await
     }
 
