@@ -131,7 +131,7 @@ async fn test_client_async() {
     .custom_key_provider(TestKeyProvider::default())
     .build();
     assert_eq!(
-        client.verify_token_async(TOKEN).await.map(|_| ()),
+        client.verify_token_async(TOKEN, true).await.map(|_| ()),
         Err(Error::Expired)
     );
 }
@@ -142,7 +142,7 @@ async fn test_client_invalid_client_id_async() {
     let client = TokioClient::builder("invalid client id")
         .custom_key_provider(TestKeyProvider::default())
         .build();
-    let result = client.verify_token_async(TOKEN).await.map(|_| ());
+    let result = client.verify_token_async(TOKEN, true).await.map(|_| ());
     assert_eq!(result, Err(Error::InvalidToken))
 }
 
@@ -151,10 +151,9 @@ async fn test_client_invalid_client_id_async() {
 async fn test_id_token_async() {
     let client = TokioClient::builder(AUDIENCE)
         .custom_key_provider(TestKeyProvider::default())
-        .unsafe_ignore_expiration()
         .build();
     let id_token = client
-        .verify_id_token_async(TOKEN)
+        .verify_id_token_async(TOKEN, false)
         .await
         .expect("id token should be valid");
     assert_eq!(id_token.get_claims().get_audience(), AUDIENCE);
@@ -166,13 +165,12 @@ async fn test_id_token_async() {
 #[tokio::test]
 async fn test_deadlock_prevention() {
     let client = TokioClient::builder(AUDIENCE)
-        .unsafe_ignore_expiration()
         .build();
     join_all((0..10u8).map(|_| verify_token_async(&client))).await;
 }
 
 #[cfg(feature = "async")]
 async fn verify_token_async(client: &TokioClient) {
-    let result = client.verify_token_async(TOKEN).await;
+    let result = client.verify_token_async(TOKEN, true).await;
     assert_eq!(result, Err(Error::InvalidToken));
 }

@@ -42,7 +42,6 @@ impl<KP: Default> GenericClientBuilder<Arc<tokio::sync::Mutex<KP>>> {
         Self {
             client_id: client_id.to_owned(),
             key_provider: Arc::new(tokio::sync::Mutex::new(KP::default())),
-            check_expiration: true,
         }
     }
     pub fn custom_key_provider<T>(
@@ -52,7 +51,6 @@ impl<KP: Default> GenericClientBuilder<Arc<tokio::sync::Mutex<KP>>> {
         GenericClientBuilder {
             client_id: self.client_id,
             key_provider: Arc::new(tokio::sync::Mutex::new(provider)),
-            check_expiration: self.check_expiration,
         }
     }
 }
