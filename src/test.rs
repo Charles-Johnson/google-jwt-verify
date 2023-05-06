@@ -82,7 +82,7 @@ pub fn test_client() {
         Client::builder("37772117408-qjqo9hca513pdcunumt7gk08ii6te8is.apps.googleusercontent.com")
             .custom_key_provider(TestKeyProvider::default())
             .build();
-    assert_eq!(client.verify_token(TOKEN).map(|_| ()), Err(Error::Expired));
+    assert_eq!(client.verify_token(TOKEN, true).map(|_| ()), Err(Error::Expired));
 }
 
 #[cfg(feature = "blocking")]
@@ -91,7 +91,7 @@ pub fn test_client_invalid_client_id() {
     let client = Client::builder("invalid client id")
         .custom_key_provider(TestKeyProvider::default())
         .build();
-    let result = client.verify_token(TOKEN).map(|_| ());
+    let result = client.verify_token(TOKEN, true).map(|_| ());
     assert_eq!(result, Err(Error::InvalidToken))
 }
 
@@ -100,10 +100,9 @@ pub fn test_client_invalid_client_id() {
 pub fn test_id_token() {
     let client = Client::builder(AUDIENCE)
         .custom_key_provider(TestKeyProvider::default())
-        .unsafe_ignore_expiration()
         .build();
     let id_token = client
-        .verify_id_token(TOKEN)
+        .verify_id_token(TOKEN, false)
         .expect("id token should be valid");
     assert_eq!(id_token.get_claims().get_audience(), AUDIENCE);
     assert_eq!(id_token.get_payload().get_domain(), None);
