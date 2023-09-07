@@ -19,12 +19,12 @@ blocking = ["reqwest/blocking"]
 async-trait = {version = "0.1", optional = true}
 openssl = "0.10"
 base64 = "0.11.0"
-serde = "1.0"
-serde_json = "1.0"
-serde_derive = "1.0"
+serde = "1"
+serde_json = "1"
+serde_derive = "1"
 reqwest = {version= "0.11" }
 headers = "0.3"
-tokio = {version = "1.28", optional = true}
+tokio = {version = "1", optional = true}
 
 [dev-dependencies]
 tokio = {version = "1.28", features = ["macros"]}
