@@ -130,21 +130,34 @@ pub enum VerificationError {
         source: PublicComponentError,
         e: String,
     },
+    #[cfg(feature = "native-ssl")]
     #[error(transparent)]
     Cryptography(#[from] openssl::error::ErrorStack),
+    #[cfg(feature = "rust-ssl")]
+    #[error("ring::error::Unspecified")]
+    RingUnspecified,
 }
 
 impl PartialEq for VerificationError {
+    #[cfg(feature = "native-ssl")]
     fn eq(&self, other: &Self) -> bool {
         matches!((self, other), (VerificationError::Modulus{source: pce1, n: c1}, VerificationError::Modulus{source: pce2, n: c2}) |
             (VerificationError::Exponent{source: pce1, e: c1}, VerificationError::Exponent{source: pce2, e: c2}) if pce1 == pce2 && c1 == c2)
             || matches!((self, other), (VerificationError::Cryptography(e1), VerificationError::Cryptography(e2)) if e1.to_string() == e2.to_string())
             || matches!((self, other), (VerificationError::UnsupportedAlgorithm{found: a1, expected: e1}, VerificationError::UnsupportedAlgorithm{found: a2, expected: e2}) if a1 == a2 && e1 == e2)
     }
+    #[cfg(feature = "rust-ssl")]
+    fn eq(&self, other: &Self) -> bool {
+        matches!((self, other), (VerificationError::Modulus{source: pce1, n: c1}, VerificationError::Modulus{source: pce2, n: c2}) |
+            (VerificationError::Exponent{source: pce1, e: c1}, VerificationError::Exponent{source: pce2, e: c2}) if pce1 == pce2 && c1 == c2)
+            || matches!((self, other), (VerificationError::UnsupportedAlgorithm{found: a1, expected: e1}, VerificationError::UnsupportedAlgorithm{found: a2, expected: e2}) if a1 == a2 && e1 == e2)
+            || self == other
+    }
 }
 
 #[derive(Debug, Error)]
 pub enum PublicComponentError {
+    #[cfg(feature = "native-ssl")]
     #[error(transparent)]
     BigNumParse(#[from] openssl::error::ErrorStack),
     #[error(transparent)]
@@ -152,8 +165,13 @@ pub enum PublicComponentError {
 }
 
 impl PartialEq for PublicComponentError {
+    #[cfg(feature = "native-ssl")]
     fn eq(&self, other: &Self) -> bool {
         matches!((self, other), (PublicComponentError::Decoding(de1), PublicComponentError::Decoding(de2)) if de1 == de2)
             || matches!((self, other), (PublicComponentError::BigNumParse(e1), PublicComponentError::BigNumParse(e2)) if e1.to_string() == e2.to_string())
+    }
+    #[cfg(feature = "rust-ssl")]
+    fn eq(&self, other: &Self) -> bool {
+        matches!((self, other), (PublicComponentError::Decoding(de1), PublicComponentError::Decoding(de2)) if de1 == de2)
     }
 }

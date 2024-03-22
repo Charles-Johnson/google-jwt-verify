@@ -103,7 +103,7 @@ pub struct GoogleSigninRequiredClaims {
     expires_at: u64,
 
     #[serde(rename = "nbf")]
-    not_before: u64,
+    not_before: Option<u64>,
 
     #[serde(rename = "iat")]
     issued_at: u64,
@@ -158,7 +158,7 @@ impl GoogleSigninRequiredClaims {
     pub fn get_expires_at(&self) -> u64 {
         self.expires_at
     }
-    pub fn get_not_before(&self) -> u64 {
+    pub fn get_not_before(&self) -> Option<u64> {
         self.not_before
     }
     pub fn get_issued_at(&self) -> u64 {
