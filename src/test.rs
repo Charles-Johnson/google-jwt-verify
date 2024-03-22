@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use super::*;
 #[cfg(feature = "async")]
-use crate::client::TokioClient;
+use crate::client::GoogleSigninTokioClient;
 use crate::error::Error;
 use crate::jwk::JsonWebKey;
 use crate::jwk::JsonWebKeySet;
@@ -10,6 +10,7 @@ use crate::jwk::JsonWebKeySet;
 use crate::key_provider::AsyncKeyProvider;
 #[cfg(feature = "blocking")]
 use crate::key_provider::KeyProvider;
+use crate::{error::TokenValidationError, token::GoogleSigninClaimsError};
 #[cfg(feature = "async")]
 use futures::future::join_all;
 
@@ -44,6 +45,7 @@ const KIDS: [&str; 2] = [
     "09bcf8028e06537d4d3ae4d84f5c5babcf2c0f0a",
     "a748e9f767159f667a0223318de0b2329e544362",
 ];
+const AFTER_EXPIRATION: u64 = 2000000000;
 
 #[derive(Default)]
 struct TestKeyProvider {
@@ -82,8 +84,17 @@ pub fn decode_keys() {
 pub fn test_client() {
     let client = Client::builder(AUDIENCE)
         .custom_key_provider(TestKeyProvider::default())
+        .unsafe_mock_timestamp(AFTER_EXPIRATION)
         .build();
-    assert_eq!(client.verify_token(TOKEN).map(|_| ()), Err(Error::Expired));
+    assert_eq!(
+        client.verify_token(TOKEN).map(|_| ()),
+        Err(Error::InvalidToken(TokenValidationError::Claims(
+            GoogleSigninClaimsError::Expired {
+                now: AFTER_EXPIRATION,
+                exp: 1710950995
+            }
+        )))
+    );
 }
 
 #[cfg(feature = "blocking")]
@@ -95,8 +106,11 @@ pub fn test_client_invalid_client_id() {
     let result = client.verify_token(TOKEN).map(|_| ());
     assert_eq!(
         result,
-        Err(Error::InvalidToken(error::InvalidError::InvalidClaims(
-            "aud".to_string()
+        Err(Error::InvalidToken(TokenValidationError::Claims(
+            GoogleSigninClaimsError::InvalidAudience {
+                expected: "invalid client id".into(),
+                found: AUDIENCE.into()
+            }
         )))
     )
 }
@@ -106,7 +120,7 @@ pub fn test_client_invalid_client_id() {
 pub fn test_id_token() {
     let client = Client::builder(AUDIENCE)
         .custom_key_provider(TestKeyProvider::default())
-        .unsafe_ignore_expiration()
+        .unsafe_mock_timestamp(0) // pretend it's 1970
         .build();
     let id_token = client
         .verify_id_token(TOKEN)
@@ -127,39 +141,51 @@ async fn decode_keys_async() {
 #[cfg(feature = "async")]
 #[tokio::test]
 async fn test_client_async() {
-    let client = TokioClient::builder(AUDIENCE)
+    let client = Client::builder(AUDIENCE)
         .custom_key_provider(TestKeyProvider::default())
+        .tokio()
+        .unsafe_mock_timestamp(AFTER_EXPIRATION)
         .build();
     assert_eq!(
-        client.verify_token_async(TOKEN).await.map(|_| ()),
-        Err(Error::Expired)
-    );
-}
-
-#[cfg(feature = "async")]
-#[tokio::test]
-async fn test_client_invalid_client_id_async() {
-    let client = TokioClient::builder("invalid client id")
-        .custom_key_provider(TestKeyProvider::default())
-        .build();
-    let result = client.verify_token_async(TOKEN).await.map(|_| ());
-    assert_eq!(
-        result,
-        Err(Error::InvalidToken(error::InvalidError::InvalidClaims(
-            "aud".to_string()
+        client.verify_token(TOKEN).await.map(|_| ()),
+        Err(Error::InvalidToken(TokenValidationError::Claims(
+            GoogleSigninClaimsError::Expired {
+                now: AFTER_EXPIRATION,
+                exp: 1526492533
+            }
         )))
     );
 }
 
 #[cfg(feature = "async")]
 #[tokio::test]
-async fn test_id_token_async() {
-    let client = TokioClient::builder(AUDIENCE)
+async fn test_client_invalid_client_id_async() {
+    let client = Client::builder("invalid client id")
+        .tokio()
         .custom_key_provider(TestKeyProvider::default())
-        .unsafe_ignore_expiration()
+        .build();
+    let result = client.verify_token(TOKEN).await.map(|_| ());
+    assert_eq!(
+        result,
+        Err(Error::InvalidToken(TokenValidationError::Claims(
+            GoogleSigninClaimsError::InvalidAudience {
+                expected: "invalid client id".into(),
+                found: AUDIENCE.into()
+            }
+        )))
+    )
+}
+
+#[cfg(feature = "async")]
+#[tokio::test]
+async fn test_id_token_async() {
+    let client = Client::builder(AUDIENCE)
+        .tokio()
+        .custom_key_provider(TestKeyProvider::default())
+        .unsafe_mock_timestamp(0) // pretend it's 1970
         .build();
     let id_token = client
-        .verify_id_token_async(TOKEN)
+        .verify_id_token(TOKEN)
         .await
         .expect("id token should be valid");
     assert_eq!(id_token.get_claims().get_audience(), AUDIENCE);
@@ -170,20 +196,15 @@ async fn test_id_token_async() {
 #[cfg(feature = "async")]
 #[tokio::test]
 async fn test_deadlock_prevention() {
-    let client = TokioClient::builder(AUDIENCE)
-        .unsafe_ignore_expiration()
+    let client = Client::builder(AUDIENCE)
+        .tokio()
+        .unsafe_mock_timestamp(0) // pretend it's 1970
         .build();
     join_all((0..10u8).map(|_| verify_token_async(&client))).await;
 }
 
 #[cfg(feature = "async")]
-async fn verify_token_async(client: &TokioClient) {
-    let result = client.verify_token_async(TOKEN).await;
-    assert!(matches!(
-        result,
-        Err(Error::InvalidToken(error::InvalidError::Json(_)))
-    ));
-    // verify_token_async expects an empty payload, which serde_json tries to parse as '{}'
-    // therefore the token is considered invalid due to failed json parsing:
-    // invalid type: map, expected unit at line 1 column 0
+async fn verify_token_async(client: &GoogleSigninTokioClient) {
+    let result = client.verify_id_token(TOKEN).await;
+    assert_eq!(result, Err(Error::KeyDoesNotExist));
 }

@@ -1,6 +1,5 @@
-use crate::algorithm::Algorithm;
 use crate::base64_decode;
-use crate::error::Error;
+use crate::{algorithm::Algorithm, error::VerificationError};
 use serde_derive::Deserialize;
 
 #[derive(Deserialize, Clone, Debug)]
@@ -29,7 +28,7 @@ impl JsonWebKey {
         self.id.clone()
     }
 
-    pub fn verify(&self, body: &[u8], signature: &[u8]) -> Result<(), Error> {
+    pub fn verify(&self, body: &[u8], signature: &[u8]) -> Result<(), VerificationError> {
         match self.algorithm {
             Algorithm::RS256 => {
                 #[cfg(feature = "native-ssl")]
@@ -37,8 +36,26 @@ impl JsonWebKey {
                     use openssl::{
                         bn::BigNum, hash::MessageDigest, pkey::PKey, rsa::Rsa, sign::Verifier,
                     };
-                    let n = BigNum::from_slice(&base64_decode(&self.n)?)?;
-                    let e = BigNum::from_slice(&base64_decode(&self.e)?)?;
+                    let n = BigNum::from_slice(&base64_decode(&self.n).map_err(|e| {
+                        VerificationError::Modulus {
+                            n: self.n.clone(),
+                            source: e.into(),
+                        }
+                    })?)
+                    .map_err(|e| VerificationError::Modulus {
+                        n: self.n.clone(),
+                        source: e.into(),
+                    })?;
+                    let e = BigNum::from_slice(&base64_decode(&self.e).map_err(|e| {
+                        VerificationError::Exponent {
+                            source: e.into(),
+                            e: self.e.clone(),
+                        }
+                    })?)
+                    .map_err(|e| VerificationError::Exponent {
+                        source: e.into(),
+                        e: self.e.clone(),
+                    })?;
                     let key = PKey::from_rsa(Rsa::from_public_components(n, e)?)?;
                     let mut verifier = Verifier::new(MessageDigest::sha256(), &key)?;
                     verifier.update(body)?;
@@ -47,8 +64,14 @@ impl JsonWebKey {
                 #[cfg(feature = "rust-ssl")]
                 {
                     ring::rsa::PublicKeyComponents {
-                        n: base64_decode(&self.n)?,
-                        e: base64_decode(&self.e)?,
+                        n: base64_decode(&self.n).map_err(|e| VerificationError::Modulus {
+                            n: self.n.clone(),
+                            source: e.into(),
+                        })?,
+                        e: base64_decode(&self.e).map_err(|e| VerificationError::Exponent {
+                            source: e.into(),
+                            e: self.e.clone(),
+                        })?,
                     }
                     .verify(
                         &ring::signature::RSA_PKCS1_2048_8192_SHA256,
@@ -59,7 +82,10 @@ impl JsonWebKey {
                 }
                 Ok(())
             }
-            _ => Err(Error::UnsupportedAlgorithm(self.algorithm)),
+            _ => Err(VerificationError::UnsupportedAlgorithm {
+                found: self.algorithm,
+                expected: Algorithm::RS256,
+            }),
         }
     }
 }
