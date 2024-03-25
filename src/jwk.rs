@@ -78,7 +78,7 @@ impl JsonWebKey {
                         body,
                         signature,
                     )
-                    .map_err(Error::from)?
+                    .map_err(|_: ring::error::Unspecified| VerificationError::RingUnspecified)?
                 }
                 Ok(())
             }
